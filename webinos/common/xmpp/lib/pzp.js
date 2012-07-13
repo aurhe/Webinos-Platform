@@ -23,6 +23,9 @@
 
 var xmpp = require('./xmpp');
 var ws = require('./webserver');
+
+var clientServer;
+
 var disco = require('./ServiceDiscovery');
 var status = require('./StatusServer');
 
@@ -31,7 +34,9 @@ var moduleRoot = require(path.resolve(__dirname, '../dependencies.json'));
 var dependencies = require(path.resolve(__dirname, '../' + moduleRoot.root.location + '/dependencies.json'));
 var webinosRoot = path.resolve(__dirname, '../' + moduleRoot.root.location);
 
-var rpc = require(path.join(webinosRoot, dependencies.rpc.location));
+var webinos = require("webinos")(__dirname);
+var rpc = webinos.global.require(webinos.global.rpc.location);
+var Registry = webinos.global.require(webinos.global.rpc.location, "lib/registry").Registry;
 
 var argv = process.argv;
 var WebinosFeatures = require('./WebinosFeatures.js');
@@ -44,7 +49,7 @@ var jid;
 // Parse command line
 var arguments_ok = false;
 console.error();
-if (argv.length == 5 || argv.length == 6) {
+if (argv.length >= 5 && argv.length <= 7) {
 	var index = parseInt(argv[2], 10);
 	if (isNaN(index) || (index > 100)) {
 		console.error("*** " + argv[2] + " is not a valid index number.\r\n");
@@ -56,16 +61,19 @@ if (argv.length == 5 || argv.length == 6) {
 		} else {
 			console.error("*** " + argv[3] + " is not a valid full jid\r\n");
 		}
-		
-		bosh = argv[5];
+
+		clientProtocol=argv[5];
+
+		bosh = argv[6];
 	}
 }
 if (!arguments_ok) {
-    console.error('Usage: pzp.js <index> <jid> <password> [bosh]\r\n');
+    console.error('Usage: pzp.js <index> <jid> <password> [ socketio | xmpp.bosh | xmpp.websocket ] [ bosh ]\r\n');
     console.error("Where:");
     console.error("    index is the index number of this PZP instance (see below)");
     console.error("    jid is the xmpp account name plus resource, e.g. w012@servicelab.com/mobile");
     console.error("    password to use");
+    console.error("    protocol and transport to use to communicate with applications");
     console.error("    bosh is the URL of the BOSH server, e.g. http://xmpp.servicelab.com/jabber/");
     console.error("");
     console.error("From the index, a port number is calculated like so: port = 8000 + 10*index. So,");
@@ -80,18 +88,32 @@ logger.trace("Done parsing command line.");
 port = 8000+10*index;
 logger.info("Using index=" + index + ", jid=" + jid + " and port=" + port);
 
-var rpcHandler = new _RPCHandler();
+var rpcHandler = new _RPCHandler(this, new Registry());
 var connection = new xmpp.Connection(rpcHandler);
 
 logger.trace("Starting servers...");
-ws.start(port, rpcHandler);
-disco.start(ws.io, connection, jid, rpcHandler);
-status.start(ws.io, connection, jid);
+var webServer = ws.start(port, rpcHandler, jid);
+
+if( typeof clientProtocol === "undefined" )
+    clientProtocol = "xmpp.websocket";
+
+if( clientProtocol === "socketio" )
+    clientServer = require('./ClientConnection.socketio');
+else
+    clientServer = require('./ClientConnection.xmpp');
+
+clientServer.start(connection,webServer,jid);
+
+var rpcServer = require("./RpcServer.js");
+rpcServer.configure(clientServer.rpcConnection,rpcHandler);
+
+disco.start(clientServer.discoveryConnection, connection, jid, rpcHandler);
+status.start(clientServer.statusConnection, connection, jid);
 
 logger.trace("Done starting servers.");
 
 logger.trace("Initialising connection to xmpp server.");
-connection.connect({ jid: argv[3], password: argv[4], bosh: argv[5] }, function() {
+connection.connect({ jid: argv[3], password: argv[4], bosh: argv[6] }, function() {
 	logger.info("Connected to the XMPP server.");
 });
 

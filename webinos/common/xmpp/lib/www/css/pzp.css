@@ -73,6 +73,13 @@ h1 {
   border: 1px solid #a50;
 }
 
+.event {
+    background: #9f9;
+    background-image: url('../images/geo-icon.png');
+    background-repeat: no-repeat;
+    border: 1px solid #363;
+}
+
 .log-line , .log-line-error {
   display: block;
   color: black;
@@ -120,4 +127,14 @@ textarea.disabled {
 input.button {
     padding: 0.2em 1em;
     margin-top: 0.4em;
+}
+
+#event_type{
+    width: 70px;
+}
+#event_text{
+    width: 70px;
+}
+#event_fields{
+    font-family: monospace;
 }

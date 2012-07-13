@@ -71,6 +71,7 @@ $(document).ready(function () {
 	        // set handlers for service discovery
 	        webinosDiscoAndBootstrap.findServices({api: webinosDiscoAndBootstrap.NS.GEOLOCATION}, onServiceHandler);
 	        webinosDiscoAndBootstrap.findServices({api: webinosDiscoAndBootstrap.NS.GET42}, onServiceHandler);
+	        webinosDiscoAndBootstrap.findServices({api: webinosDiscoAndBootstrap.NS.EVENT}, onServiceHandler);
 		});
     }
 
@@ -102,8 +103,8 @@ function onServiceHandler(s) {
     
     // if the service becomes unavailable remove it from the GUI and from the administration
     s.onRemove = function(service) {
-        delete services[this.id];
-        $("#" + this.id).fadeOut('fast', function() {$(this).remove(); });
+        delete services[service.id];
+        $("#" + service.id).fadeOut('fast', function() {$(this).remove(); });
     }
     
     // Add the service to the GUI
@@ -118,15 +119,44 @@ function onServiceHandler(s) {
 		target = "#buddies_services_group";
 	}
 
-    var topText = (s.name == 'geolocation') ? "Location: unknown" : s.name;
-    var element = $("<div class='service " + s.name + "' id='" + s.id + "'>" + topText + "<br><em>" + s.device + "</em></div>" )
-        .hide().appendTo(target).fadeIn('fast');
+    if(s.name === "event"){
 
-    // Attach handlers for service removal and invocation
-    // $(element).click( function() {invoke($(this).attr('id'));} );
-    $(element).click( function() {invoke(s.id);} );
-    
-    // Install handlers that present results of geolocation queries
+        // Event service should have text fields and buttons to allow events to be sent
+        var element = "<div class='service " + s.name + "' id='" + s.id + "'>"
+            + s.name + "<br>"
+            + "<em>"+ s.device + "</em><br>"
+            +"<div id='event_fields'>"
+            + "type <input id='event_type' value='message'/><br>"
+            + "text <input id='event_text' value='text'/><button id='event_send_"+s.id+"'>Send</button>"
+            + "<div id='event_result'></div>"
+            + "</div>"
+            + "</div>";
+
+        $(element).hide().appendTo(target).fadeIn('fast');
+
+        $("#event_send_"+s.id).click( function() {
+            s.invoke(s.id,"dispatchWebinosEvent",{
+                webinosevent: {
+                    addressing: {
+                        to: [{ id:s.device }],
+                        source:{ id: pzpID }
+                    },
+                    type: $("#event_type").val(),
+                    payload: $("#event_text").val()
+                }
+        })});
+
+    }else{
+        var topText = (s.name == 'geolocation') ? "Location: unknown" : s.name;
+        var element = $("<div class='service " + s.name + "' id='" + s.id + "'>" + topText + "<br><em>" + s.device + "</em></div>" )
+            .hide().appendTo(target).fadeIn('fast');
+
+        // Attach handlers for service removal and invocation
+        // $(element).click( function() {invoke($(this).attr('id'));} );
+        $(element).click( function() {invoke(s.id);} );
+    }
+
+    // install handlers that present results of geolocation queries
     if (s.name == 'geolocation') {
         s.onResult = function(location) {
             $('#' + s.id).html(location.coords.latitude + '&deg; / ' + location.coords.longitude + "&deg;<br><em>" + s.device + "</em>").effect("pulsate", { times:1 }, 400);
@@ -143,6 +173,30 @@ function onServiceHandler(s) {
         s.onError = function(err) {
             $('#' + s.id).html("<span class=geo-error>" + err + "</span><br><em>" + s.device + "</em>").effect("pulsate", { times:1 }, 400);
         };
+    }
+
+    if (s.name == 'event') {
+        s.onResult = function(params) {
+            if(typeof params.webinosevent !== "undefined")
+                $("#event_result").append("Message from "+params.webinosevent.addressing.source.id
+                    +": "+params.webinosevent.payload+"<br>").effect("pulsate", { times:1 }, 400);
+//            else
+//            if(typeof params.event !== "undefined")
+//                $("#event_result").append("Sending message to: "+params.recipient
+//                    +"<br>").effect("pulsate", { times:1 }, 400);
+        };
+        s.onError = function(err) {
+            $('#' + s.id).html("<span class=geo-error>" + err + "</span><br><em>" + s.device + "</em>").effect("pulsate", { times:1 }, 400);
+        };
+
+        // when a local Event service is ready, add a listener to receive all events sent to this pzp
+        if(s.isLocal())
+            s.invoke(s.id,"addWebinosEventListener",{
+                type: $("#event_type").val(),
+                source: s.device
+            });
+
+        //TODO remove event listeners before disconnecting
     }
 
 	if (s.isLocal()) {

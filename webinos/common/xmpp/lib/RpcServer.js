@@ -26,36 +26,33 @@ var url = require("url");
 var path = require("path");
 var fs = require("fs");
 var logger = require('nlogger').logger('RpcServer.js');
-var io;
 
 //RPC server initialization
-function configure(server, rpcHandler) {
-	io = server;
-	
-	io.of('/jsonrpc').on('connection', function(socket) {
-	    logger.trace((new Date()) + " Connection accepted.");
+function configure(clientConnection, rpcHandler) {
 
-	    socket.on('message', function(message) {
-			msg = JSON.parse(message);
+	clientConnection.on('connection', function(socket){
+		logger.trace((new Date()) + " Connection accepted.");
+
+		socket.on('message', function(msg) {
 			logger.trace('calling rpc with message(' +  msg + ')');
 			logger.trace('message.method=' + msg.method);
-	        rpcHandler.handleMessage(msg, this, Math.round(Math.random() * 10000));
+			rpcHandler.handleMessage(msg, this, Math.round(Math.random() * 10000));
 			logger.trace('rpc called.');
-	    });
-		
+		});
+
 		socket.on('disconnect', function () {
-	    	logger.debug('user disconnected');
-	  	});
+			logger.debug('user disconnected');
+		});
 
 		//RPC writer for this connection
 		var messageHandler = {
-    		write: function(result, respto, msgid)	{
-    			logger.trace('result(' + result + ')');
-    			socket.send(JSON.stringify(result));
-    			logger.trace('end result();')
-    		}
+			write: function(result, respto, msgid)	{
+				logger.trace('result(' + result + ')');
+				socket.send(result, respto, msgid);
+				logger.trace('end result();')
+			}
 		}
-		
+
 		rpcHandler.setMessageHandler(messageHandler);
 	});
 }

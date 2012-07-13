@@ -33,30 +33,15 @@
 
 var	serviceFactory = {
 			'urn:services-webinos-org:geolocation': function () { return new GeolocationService },
-			'urn:services-webinos-org:get42': function () { return new Get42Service }
+			'urn:services-webinos-org:get42': function () { return new Get42Service },
+			'urn:services-webinos-org:event': function () { return new EventService }
 }
-
-// we use different namespaces. connection will be multiplexed over a single socket.
-var channel = io.connect('/jsonrpc');
-var disco = io.connect('/disco');
-var bootstrap = io.connect('/bootstrap');
 
 /* taken and changed from the orginal RPC client: webinos.js */
-
-var messageHandler = {
-    write: function(text, responseto, msgid) {
-    	channel.send(JSON.stringify(text));
-    }
-}
-
 if (typeof webinos === 'undefined') webinos = {};
 
 webinos.rpc = new RPCHandler;
-webinos.rpc.setMessageHandler(messageHandler);
-
-channel.on('message', function (message) {
-	webinos.rpc.handleMessage(JSON.parse(message));
-});
+webinos.rpc.setMessageHandler(rpcConnection);
 
 function logObj(obj, name){
 	for (var myKey in obj){
@@ -74,12 +59,13 @@ var webinosDiscoAndBootstrap = {
     
     NS: {
         GEOLOCATION: 'urn:services-webinos-org:geolocation',
-        GET42: 'urn:services-webinos-org:get42'
+        GET42: 'urn:services-webinos-org:get42',
+        EVENT: 'urn:services-webinos-org:event'
     },
     
     // let the implementation know what services to discover
     findServices: function(p, cb) {
-		disco.on('resolved', function(data) {
+		discoveryService.on('resolved', function(data) {
 			if (data.ns != null) {
 				if (!data.local && data.ns === p.api) {
 					var service = serviceFactory[data.ns]();
@@ -87,23 +73,24 @@ var webinosDiscoAndBootstrap = {
 					service.owner = data.owner;
 					service.id = data.id;
 					service.shared = data.shared;
-					
-					disco.on(data.id + '-removed', function (data) {
-						service.remove();
+
+					discoveryService.on('removed', function (data) {
+						if (service.onRemove)
+							service.onRemove(data);
 					});
 
 					cb(service);
 				}
 			}
 		});
-		
-		disco.emit('request', { ns: p.api });
+
+		discoveryService.send('request', { ns: p.api });
         //webinosImpl.findServices(p, cb);
     },
 
     // let the implementation know what services to share with others
     shareService: function(id, flag) {
-		disco.emit('share', { 'id': id, 'flag': flag });
+		discoveryService.send('share', { 'id': id, 'flag': flag.toString() });
         //webinosImpl.shareService(ns, flag);
     },
 
@@ -120,7 +107,7 @@ var webinosDiscoAndBootstrap = {
 	},
 	
 	resolveLocalFeatures: function(cb) {
-		disco.on('resolved', function (data) {			
+		discoveryService.on('resolved', function (data) {
 			if (data.ns != null) {
 				if (data.local) {
 					var service = serviceFactory[data.ns]();
@@ -130,15 +117,16 @@ var webinosDiscoAndBootstrap = {
 					service.shared = data.shared;
 					
 					cb(service);
-					
-					disco.on(data.id + '-removed', function (data) {
-						service.remove();
+
+					discoveryService.on('removed', function (data) {
+						if (service.onRemove)
+							service.onRemove(data);
 					});
 				}
 			}
 		});
 
-		disco.emit('local', { filter: 'all' });
+		discoveryService.send('local', { filter: 'all' });
     },
 
     disconnect: function() {
@@ -236,6 +224,66 @@ function get42Invoke(id) {
 
 ///////////////////////// END Get42Service /////////////////////////
 
+
+/*
+ * Event Service, defines as subclass of GenericService
+ */
+function EventService() {
+    this.ns = "urn:services-webinos-org:event";
+    this.name = "event";
+    this.friendlyName = "event service";
+
+    this.api = this.ns;
+    this.displayName = 'Event' + this.id;
+    this.description = this.friendlyName;
+
+    this.invoke = eventInvoke;
+    this.onResult = null;
+    this.result = function(event) {
+        if (this.onResult) (this.onResult)(event);
+    };
+    this.onError = null;
+    this.error = function(err) {
+        if (this.onError) (this.onError)(err);
+    };
+
+    eventListeners.push(this);
+}
+
+// store all registered event listener because each event can have more than one receiver
+var eventListeners=[];
+
+// handle RPC messages sent to the app
+rpcConnection.on('message', function (message) {
+
+    // if it is a event find which listeners should receive it
+    if(typeof message.params !== "undefined"
+        && ( typeof message.params.event !== "undefined" || typeof message.params.webinosevent !== "undefined")) {
+        for(var i=0;i<eventListeners.length;i++)
+            if((typeof message.params.event !== "undefined" && eventListeners[i].device === message.params.event.addressing.to[0].id)
+                || (typeof message.params.webinosevent !== "undefined" && eventListeners[i].device === message.params.webinosevent.addressing.to[0].id))
+                eventListeners[i].onResult(message.params);
+    } else
+        webinos.rpc.handleMessage(message);
+});
+
+EventService.prototype = new GenericService;
+
+function eventInvoke(id,method,params) {
+
+    var rpc = webinos.rpc.createRPC(this.ns+ "@" + id, "invoke", {
+        method:method,
+        params:params
+    });
+    var onSuccess = this.onResult;
+
+    webinos.rpc.executeRPC(rpc,
+        function (result){
+            onSuccess(result);
+        },
+        function (error){}
+    );
+}
 
 /*
  * Generic Service methods, no need to override these

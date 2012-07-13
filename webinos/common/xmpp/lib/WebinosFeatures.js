@@ -25,15 +25,18 @@
 var sys = require('util');
 var GeolocationFeature = require('./GeolocationFeature.js');
 var Get42Feature = require('./Get42Feature.js');
+var EventFeature = require('./EventFeature.js');
 
 var NS = {
 	GEOLOCATION: GeolocationFeature.NS,
-	GET42: Get42Feature.NS
+	GET42: Get42Feature.NS,
+	EVENT: EventFeature.NS
 }
 
 var factory = {
 	'urn:services-webinos-org:geolocation': function (rpcHandler, connector) { return new GeolocationFeature.GeolocationFeature(rpcHandler, connector) },
-	'urn:services-webinos-org:get42': function (rpcHandler) { return new Get42Feature.Get42Feature(rpcHandler) }
+	'urn:services-webinos-org:get42': function (rpcHandler) { return new Get42Feature.Get42Feature(rpcHandler) },
+	'urn:services-webinos-org:event': function (rpcHandler) { return new EventFeature.EventFeature(rpcHandler) }
 }
 
 exports.factory = factory;

@@ -26,19 +26,16 @@ var logger = require('nlogger').logger('StatusServer.js');
 
 var connection;
 
-var io;
-
 //TODO retrieve jid from pzhConnection
-function start(socketIO, pzhConnection, jid) {
+function start(clientConnection, pzhConnection, jid) {
 	logger.trace("Entering start()");
 
-	io = socketIO;
 	connection = pzhConnection;
-	
-	io.of('/bootstrap').on('connection', function(socket) {
+
+	clientConnection.on("connection",function(socket){
 		logger.trace("New connection.");
 		//TODO add boolean for connected status to XMPP server
-		socket.emit('status', { 'device': jid, 'owner': jid.split("/")[0]});
+		socket.send('status', { 'device': jid, 'owner': jid.split("/")[0]});
 	});
 	
 	//TODO add connection listener to update status if pzh connection is disconnected

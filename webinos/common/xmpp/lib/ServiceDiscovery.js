@@ -29,34 +29,32 @@ var WebinosFeatures = require('./WebinosFeatures.js');
 var fm = require('./LocalFeatureManager.js');
 
 var connection;
-var io;
 
-function start(socketIO, pzhConnection, jid, rpcHandler) {
+function start(clientConnection, pzhConnection, jid, rpcHandler) {
 	logger.trace("Entering start()");
 
 	fm.initialize(pzhConnection, jid, rpcHandler);
 
 	connection = pzhConnection;
-	io = socketIO;
-	
+
 	var publisher = function(socket, feature) {
 		logger.trace("The feature " + feature.ns + " on " + feature.device + " became available.");
 
-		socket.emit('resolved', {id: feature.id, ns: feature.ns, device: feature.device, owner: feature.owner, local: feature.local, shared: feature.shared});
+		socket.send('resolved', {id: feature.id, ns: feature.ns, device: feature.device, owner: feature.owner, local: feature.local, shared: feature.shared});
 
 		// keep track of the feature.
 		feature.once('remove', function(feature) {
 			// unpublish when the feature is removed.
 			logger.trace("onRemove: the feature " + feature.ns + " on " + feature.device + " became unavailable. Id=" + feature.id);
 			
-			socket.emit(feature.id + '-removed', { id: feature.id });
+			socket.send("removed", { id: feature.id });
 			
-			logger.trace('onRemove: and is removed: ' + feature.id + '-removed');
+			logger.trace('onRemove: and is removed: ' + feature.id );
 		});
 	}
 	
 	// subscribe to disco requests from the browser
-	io.of('/disco').on('connection', function(socket) {
+	clientConnection.on("connection",function(socket){
 		socket.on('request', function(data) {
 			logger.trace("Received disco request: " + data.ns);
 			connection.removeListener(data.ns, function(feature) {
@@ -96,6 +94,12 @@ function start(socketIO, pzhConnection, jid, rpcHandler) {
 		
 		socket.on('share', function(data) {
 			logger.trace("Entering subscribe(feature " + data.id + " turned " + data.flag + ")");
+
+			if(data.flag === "true")
+				data.flag = true;
+			else
+				if(data.flag === "false")
+					data.flag = false;
 
 			if (data.flag) {
 				logger.trace('Sharing the feature.');

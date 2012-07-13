@@ -20,14 +20,11 @@
 // based on nodebeginner.org project
 // author: Victor Klos & Eelco Cramer
 var http = require('http');
-var server = http.createServer(handler);
+var server;
 var url = require("url");
 var path = require("path");
 var fs = require("fs");
 var logger = require('nlogger').logger('webserver.js');
-var io = require('socket.io').listen(server);
-
-var rpcServer = require("./RpcServer.js");
 
 var path = require('path');
 var documentRoot = path.resolve(__dirname, './www');
@@ -37,6 +34,8 @@ var dependencies = require(path.normalize(dependencyPath));
 var webinosRoot = path.resolve(__dirname, '../' + moduleRoot.root.location);
 
 var rpc = require(path.join(webinosRoot, dependencies.rpc.location));
+
+var serverJID;
 
 function handler(request, response) {
 	logger.trace("Entering request callback");
@@ -68,6 +67,29 @@ function handler(request, response) {
     		response.write("Error " + err + " when serving " + pathname);
     		logger.info("404 NOT FOUND for " + filename);
     	} else {
+            if(pathname === "index.html" || pathname === "/benchmark.html"){
+                var imports;
+
+                // change imported libraries on the page to support the transport selected
+                if( clientProtocol === "socketio" )
+                    imports="<script type='text/javascript' src='/socket.io/socket.io.js'></script>\n"
+                        +"    <script type='text/javascript'>pzpID='"+serverJID+"'</script>\n"
+                        +"    <script type='text/javascript' src='webinos.socketio.js'></script>";
+                else{
+                    imports="<script type='text/javascript' src='libs/strophe.js'></script>\n"
+                        +"    <script type='text/javascript' src='libs/strophe.rpc.js'></script>\n";
+
+                    if(clientProtocol === "xmpp.bosh")
+                        imports+="    <script type='text/javascript'>selectedProtocol='xmpp.bosh'</script>\n";
+                    else
+                        imports+="    <script type='text/javascript'>selectedProtocol='xmpp.websocket'</script>\n";
+
+                    imports+="    <script type='text/javascript'>pzpID='"+serverJID+"'</script>\n";
+                    imports+="    <script type='text/javascript' src='webinos.xmpp.js'></script>";
+                }
+                data=data.toString().replace("<!--TRANSPORT_PROTOCOL-->",imports);
+            }
+
     		response.writeHead(200, {"Content-Type": mimeType(filename)});
     		response.write(data);
     		logger.info("200 OK for " + filename);
@@ -77,33 +99,25 @@ function handler(request, response) {
     });
 }
 
-function start(ws_port, rpcHandler) {
+function start(ws_port, rpcHandler, jid) {
+
+	serverJID=jid;
+
+	server = http.createServer(handler);
+
 	logger.trace("Entering start()");
 	logger.debug("Creating web server on port " + ws_port);
 	
 	server.listen(ws_port);
-	
-//	io.enable('browser client minification');  // send minified client
-//	io.enable('browser client etag');          // apply etag caching logic based on version number
-	io.set('log level', 1);                    // reduce logging
-	io.set('transports', [                     // enable all transports (optional if you want flashsocket)
-	    'websocket'
-	  , 'flashsocket'
-	  , 'htmlfile'
-	  , 'xhr-polling'
-	  , 'jsonp-polling'
-	]);
-	
+
 	logger.info("Webserver listening on port " + ws_port);
 	
-	// configure the RPC server
-	rpcServer.configure(io, rpcHandler);
-	
 	logger.trace("Leaving start()");
+
+	return server;
 }
 
 exports.start = start;
-exports.io = io;
 
 var mimeTypes = [];
 mimeTypes[".png"]  = "image/png";

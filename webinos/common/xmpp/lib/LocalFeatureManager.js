@@ -56,8 +56,16 @@ function initialize(pzhConnection, jid, rpcHandler) {
 	//TODO here goes the RPC stuff
 	// should result in a call to remoteAlertFeature.invoke(payload);
 
+	var eventFeature = webinosFeatures.factory[webinosFeatures.NS.EVENT](rpcHandler);
+	eventFeature.local = true;
+	eventFeature.shared = false;
+	eventFeature.device = jid;
+	eventFeature.owner = jid.split("/")[0];
+	eventFeature.uplink = connection;
+
 	features[geoLocationFeature.id] = geoLocationFeature;
 	features[get42Feature.id] = get42Feature;
+	features[eventFeature.id] = eventFeature;
 }
 
 exports.features = features;

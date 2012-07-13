@@ -72,17 +72,27 @@ npm install node-stringprep
 
 7. nlogger: npm install nlogger
 
+8. node-xmpp-bosh: npm install node-xmpp-bosh
+
+node-xmpp-bosh 0.6.1 stopped working due to a backward incompatible API change on log4js.
+If the pzp shows a "TypeError: Object #<Object> has no method 'consoleAppender'" when starting,
+change the line "log4js": ">= 0.4.2" to "log4js": "= 0.4.2" on node_modules/node-xmpp-bosh/package.json
+and run "npm install ." on the same directory.
+
+See https://github.com/dhruvbird/node-xmpp-bosh/issues/33 for more details.
+
+
 Instructions:
 
 1. Start the client.
 
-node pzp.js <index> <jid> <password> [bosh]
+node pzp.js <index> <jid> <password> [ socketio | xmpp.bosh | xmpp.websocket ] [bosh]
 
 For example:
 
-"node pzp.js 0 w021@servicelab.org/mobile webinos" starts the PZP on port 8000.
-"node pzp.js 1 w021@servicelab.org/tv webinos" starts the PZP on port 8010.
-"node pzp.js 2 w021@servicelab.org/viabosh webinos http://xmpp.servicelab.org/jabber/" starts the PZP on port 8020 and connects via http.
+"node pzp.js 0 w021@servicelab.org/mobile webinos xmpp.websocket" starts the PZP on port 8000.
+"node pzp.js 8 w021@servicelab.org/tv webinos socketio" starts the PZP on port 8080.
+"node pzp.js 2 w021@servicelab.org/viabosh webinos xmpp.websocket http://xmpp.servicelab.org/jabber/" starts the PZP on port 8020 and connects via http.
 
 2. To see if things are working. Start a second client for the same jid (other resource). You can now see the client discovering the features of the other instance and vice versa.
 

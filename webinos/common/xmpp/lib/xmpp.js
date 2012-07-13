@@ -152,7 +152,7 @@ Connection.prototype.invokeFeature = function(feature, callback, params) {
 	//TODO do something with optional params.
 	
 	var xmppInvoke = new xmpp.Element('iq', { 'to': feature.device, 'type': 'get', 'id': id }).
-		c('query', {'xmlns': feature.ns});
+		c('query', {'xmlns': feature.ns}).t(JSON.stringify(params));
 		
 	logger.debug('Sending RPC message via XMPP: ' + xmppInvoke.tree());
 	connection.client.send(xmppInvoke);
